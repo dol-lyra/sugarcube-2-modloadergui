@@ -88,6 +88,8 @@ class SafeMode implements Sc2EventTracerCallback, LifeTimeCircleHook {
 
 export class ModLoadSwitch implements LifeTimeCircleHook {
     private safeMode: SafeMode;
+    private static LocalHiddenKey = 'ModLoadSwitch_LocalHidden';
+    private static LocalOrderKey = 'ModLoadSwitch_LocalOrder';
 
     constructor(
         public gSC2DataManager: SC2DataManager,
@@ -114,8 +116,83 @@ export class ModLoadSwitch implements LifeTimeCircleHook {
     }
 
     async canLoadThisMod(bootJson: ModBootJson, zip: JSZip): Promise<boolean> {
-        // TODO  check load list
+        // Respect SafeMode + user-configured hidden lists for Local/IndexDB mods with extra fields
+        if (this.isSafeModeOn()) {
+            return false;
+        }
+        try {
+            if (this.isManageableMod(bootJson)) {
+                const hiddenIndexDb = await this.gSC2DataManager.getModLoadController().loadHiddenModList() || [];
+                const hiddenLocal = this.getLocalHiddenList();
+                if (hiddenIndexDb.includes(bootJson.name) || hiddenLocal.includes(bootJson.name)) {
+                    console.log('[ModLoaderGui] ModLoadSwitch.canLoadThisMod() banned by hidden list', bootJson.name);
+                    return false;
+                }
+            }
+        } catch (e) {
+            console.error('[ModLoaderGui] ModLoadSwitch.canLoadThisMod error', e);
+        }
         return true;
     }
 
+    // ================== Local mod enable/disable/sort support ==================
+    // Determine whether a mod is explicitly manageable by a custom boot.json flag.
+    // Usage (either of the following):
+    //   Top-level flag:   { "modLoaderManageable": true }
+    //   Nested namespace: { "ModLoaderGui": { "manageable": true } }
+    private isManageableMod(bootJson: ModBootJson): boolean {
+        const anyBoot = bootJson as any;
+        return anyBoot?.modLoaderManageable === true || anyBoot?.ModLoaderGui?.manageable === true;
+    }
+
+    public listLocalExtraModNameOnly(): string[] {
+        // Walk all loaded mods, pick those from Local source and with extra fields
+        const names = this.gModUtils.getModListNameNoAlias();
+        const r: string[] = [];
+        for (const n of names) {
+            const info = this.gModUtils.getModAndFromInfo(n);
+            if (!info) continue;
+            if (info.from === 'Local' && this.isManageableMod(info.mod.bootJson)) {
+                r.push(info.name);
+            }
+        }
+        return r;
+    }
+
+    // Backward alias if future code references a more explicit name
+    public listLocalManageableModNameOnly(): string[] {
+        return this.listLocalExtraModNameOnly();
+    }
+
+    public getLocalHiddenList(): string[] {
+        try {
+            const txt = localStorage.getItem(ModLoadSwitch.LocalHiddenKey);
+            if (!txt) return [];
+            const l = JSON.parse(txt);
+            return Array.isArray(l) ? l.filter((s: any) => typeof s === 'string') : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    public overwriteLocalHiddenList(list: string[]): void {
+        const uniq = Array.from(new Set(list));
+        localStorage.setItem(ModLoadSwitch.LocalHiddenKey, JSON.stringify(uniq));
+    }
+
+    public getLocalOrderList(): string[] {
+        try {
+            const txt = localStorage.getItem(ModLoadSwitch.LocalOrderKey);
+            if (!txt) return [];
+            const l = JSON.parse(txt);
+            return Array.isArray(l) ? l.filter((s: any) => typeof s === 'string') : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    public overwriteLocalOrderList(list: string[]): void {
+        const uniq = Array.from(new Set(list));
+        localStorage.setItem(ModLoadSwitch.LocalOrderKey, JSON.stringify(uniq));
+    }
 }

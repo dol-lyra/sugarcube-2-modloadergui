@@ -654,6 +654,10 @@ export class Gui {
         return this.modSubUiAngularJsService;
     }
 
+    public getModLoadSwitch() {
+        return this.modLoadSwitch;
+    }
+
     protected modSubUiAngularJsService: ModSubUiAngularJsService;
     protected modManagerSubUi: ModManagerSubUi;
 

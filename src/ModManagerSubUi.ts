@@ -26,9 +26,15 @@ export class ModManagerSubUi {
     }
 
     async whenCreate(Ref: ModSubUiAngularJsModeExportInterface) {
-        // const modListEnabled = await this.modLoaderGui.listSideLoadMod();
-        const modListEnabled = await this.modLoaderGui.listSideLoadModNameOnly();
-        const modListDisable = await this.modLoaderGui.listSideLoadHiddenModNameOnly();
+        // Build combined lists: SideLoad (IndexDB) + Local (with extra boot.json fields)
+        const sideEnabled = await this.modLoaderGui.listSideLoadModNameOnly();
+        const sideDisabled = await this.modLoaderGui.listSideLoadHiddenModNameOnly();
+        const modLoadSwitch = this.modLoaderGui.getModLoadSwitch();
+        const localAll = modLoadSwitch.listLocalExtraModNameOnly();
+        const localHidden = modLoadSwitch.getLocalHiddenList();
+        const localEnabled = localAll.filter(n => !localHidden.includes(n));
+        const modListEnabled = Array.from(new Set([...sideEnabled, ...localEnabled]));
+        const modListDisable = Array.from(new Set([...sideDisabled, ...localHidden]));
         // console.log('[ModManagerSubUi] whenCreate', [modListEnabled, modListDisable]);
         Ref.addComponentModGuiConfig({
             selector: 'enable-order-component',
@@ -63,9 +69,20 @@ export class ModManagerSubUi {
                     selectedKeyDisabled: string | number,
                 ) => {
                     try {
-                        // console.log('onChange', [action, listEnabled, listDisabled, selectedKeyEnabled, selectedKeyDisabled]);
-                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBModList(listEnabled.map(T => T.key) as string[]);
-                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBHiddenModList(listDisabled.map(T => T.key) as string[]);
+                        // Split combined lists back to SideLoad and Local buckets
+                        const enabledNames = (listEnabled.map(T => T.key) as string[]);
+                        const disabledNames = (listDisabled.map(T => T.key) as string[]);
+                        const sideAllSet = new Set(await this.modLoaderGui.listSideLoadModNameOnly());
+                        const localAllSet = new Set(modLoadSwitch.listLocalExtraModNameOnly());
+                        const sideEnabledNew = enabledNames.filter(n => sideAllSet.has(n));
+                        const sideHiddenNew = disabledNames.filter(n => sideAllSet.has(n));
+                        const localEnabledNew = enabledNames.filter(n => localAllSet.has(n));
+                        const localHiddenNew = disabledNames.filter(n => localAllSet.has(n));
+
+                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBModList(sideEnabledNew);
+                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBHiddenModList(sideHiddenNew);
+                        modLoadSwitch.overwriteLocalOrderList(localEnabledNew);
+                        modLoadSwitch.overwriteLocalHiddenList(localHiddenNew);
                     } catch (e) {
                         console.error('[ModLoaderGui] ModManagerSubUi onChange', e);
                     }
