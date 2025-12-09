@@ -23,6 +23,7 @@ export const StringTable_EN: StringTableType = {
     ReadMeSelect: 'ModList：',
     ReadMeButton: 'ViewSelectedModReadMe',
     ReadMeContent: 'ReadMe',
+    ReadMeBootJsonContent: 'boot.json',
 
     LoadLogRadioNoError: 'NotShowError',
     LoadLogRadioNoWarning: 'NotShowWarning',

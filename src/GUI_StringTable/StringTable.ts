@@ -24,6 +24,7 @@ const StringTableKeys = [
     'ReadMeSelect',
     'ReadMeButton',
     'ReadMeContent',
+    'ReadMeBootJsonContent',
 
     'LoadLogRadioNoError',
     'LoadLogRadioNoWarning',

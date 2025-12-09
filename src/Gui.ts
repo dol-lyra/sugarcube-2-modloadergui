@@ -466,7 +466,7 @@ export class Gui {
                     readonly: "readonly",
                 },
                 'BootJson_r': {
-                    label: StringTable.ReadMeContent,
+                    label: StringTable.ReadMeBootJsonContent,
                     type: 'textarea',
                     default: '',
                     readonly: "readonly",

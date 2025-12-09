@@ -23,6 +23,7 @@ export const StringTable_CN: StringTableType = {
     ReadMeSelect: 'Mod列表：',
     ReadMeButton: '查看选定Mod的ReadMe',
     ReadMeContent: 'ReadMe',
+    ReadMeBootJsonContent: 'boot.json',
 
     LoadLogRadioNoError: '不显示错误',
     LoadLogRadioNoWarning: '不显示警告',
