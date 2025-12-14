@@ -26,14 +26,21 @@ export class ModManagerSubUi {
     }
 
     async whenCreate(Ref: ModSubUiAngularJsModeExportInterface) {
-        // const modListEnabled = await this.modLoaderGui.listSideLoadMod();
+        // All mod lists (both SideLoad/IndexDB and Local with extra boot.json fields) are managed through IndexDB
         const modListEnabled = await this.modLoaderGui.listSideLoadModNameOnly();
         const modListDisable = await this.modLoaderGui.listSideLoadHiddenModNameOnly();
-        // console.log('[ModManagerSubUi] whenCreate', [modListEnabled, modListDisable]);
+        const modLoadSwitch = this.modLoaderGui.getModLoadSwitch();
+        const localAll = modLoadSwitch.listLocalExtraModNameOnly();
+        // Add local mods to the enabled list
+        const combinedEnabled = Array.from(new Set([...modListEnabled, ...localAll]));
+        // Filter out hidden ones
+        const finalEnabled = combinedEnabled.filter(n => !modListDisable.includes(n));
+        const finalDisabled = modListDisable;
+        // console.log('[ModManagerSubUi] whenCreate', [finalEnabled, finalDisabled]);
         Ref.addComponentModGuiConfig({
             selector: 'enable-order-component',
             data: {
-                listEnabled: modListEnabled.map(T => {
+                listEnabled: finalEnabled.map(T => {
                     return {
                         key: T,
                         str: T,
@@ -63,9 +70,12 @@ export class ModManagerSubUi {
                     selectedKeyDisabled: string | number,
                 ) => {
                     try {
-                        // console.log('onChange', [action, listEnabled, listDisabled, selectedKeyEnabled, selectedKeyDisabled]);
-                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBModList(listEnabled.map(T => T.key) as string[]);
-                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBHiddenModList(listDisabled.map(T => T.key) as string[]);
+                        // All mod lists are now stored in IndexDB only
+                        const enabledNames = (listEnabled.map(T => T.key) as string[]);
+                        const disabledNames = (listDisabled.map(T => T.key) as string[]);
+
+                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBModList(enabledNames);
+                        await this.modLoaderGui.gModUtils.getModLoadController().overwriteModIndexDBHiddenModList(disabledNames);
                     } catch (e) {
                         console.error('[ModLoaderGui] ModManagerSubUi onChange', e);
                     }

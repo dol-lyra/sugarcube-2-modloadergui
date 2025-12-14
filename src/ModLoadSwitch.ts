@@ -114,8 +114,50 @@ export class ModLoadSwitch implements LifeTimeCircleHook {
     }
 
     async canLoadThisMod(bootJson: ModBootJson, zip: JSZip): Promise<boolean> {
-        // TODO  check load list
+        // Respect SafeMode + user-configured hidden lists for Local/IndexDB mods with extra fields
+        if (this.isSafeModeOn()) {
+            return false;
+        }
+        try {
+            if (this.isManageableMod(bootJson)) {
+                const hiddenIndexDb = await this.gSC2DataManager.getModLoadController().loadHiddenModList() || [];
+                if (hiddenIndexDb.includes(bootJson.name)) {
+                    console.log('[ModLoaderGui] ModLoadSwitch.canLoadThisMod() banned by hidden list', bootJson.name);
+                    return false;
+                }
+            }
+        } catch (e) {
+            console.error('[ModLoaderGui] ModLoadSwitch.canLoadThisMod error', e);
+        }
         return true;
     }
 
+    // ================== Local mod enable/disable/sort support ==================
+    // Determine whether a mod is explicitly manageable by a custom boot.json flag.
+    // Usage (either of the following):
+    //   Top-level flag:   { "modLoaderManageable": true }
+    //   Nested namespace: { "ModLoaderGui": { "manageable": true } }
+    private isManageableMod(bootJson: ModBootJson): boolean {
+        const anyBoot = bootJson as any;
+        return anyBoot?.modLoaderManageable === true || anyBoot?.ModLoaderGui?.manageable === true;
+    }
+
+    public listLocalExtraModNameOnly(): string[] {
+        // Walk all loaded mods, pick those from Local source and with extra fields
+        const names = this.gModUtils.getModListNameNoAlias();
+        const r: string[] = [];
+        for (const n of names) {
+            const info = this.gModUtils.getModAndFromInfo(n);
+            if (!info) continue;
+            if (info.from === 'Local' && this.isManageableMod(info.mod.bootJson)) {
+                r.push(info.name);
+            }
+        }
+        return r;
+    }
+
+    // Backward alias if future code references a more explicit name
+    public listLocalManageableModNameOnly(): string[] {
+        return this.listLocalExtraModNameOnly();
+    }
 }
