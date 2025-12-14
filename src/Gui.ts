@@ -654,6 +654,10 @@ export class Gui {
         return this.modSubUiAngularJsService;
     }
 
+    public getModLoadSwitch() {
+        return this.modLoadSwitch;
+    }
+
     protected modSubUiAngularJsService: ModSubUiAngularJsService;
     protected modManagerSubUi: ModManagerSubUi;
 
@@ -771,6 +775,10 @@ export class Gui {
         const idl = new Map<string, typeof modList[0]>(modList.map(T => [T.name, T]));
         const modNameVersionList = [];
         for (const T of nameList) {
+            // Skip mods in the manageable list
+            if (ModLoadSwitch.MANAGEABLE_MOD_NAMES.includes(T)) {
+                continue;
+            }
             const modInfo = idl.get(T);
             if (modInfo) {
                 modNameVersionList.push(`${T} {v:${modInfo.mod.version || '?'}}${nickName(modInfo.mod)}`);
@@ -803,11 +811,34 @@ export class Gui {
     }
 
     async listSideLoadModNameCanUnload() {
-        const nameList = [
-            ...await this.gModUtils.getModLoadController().listModIndexDB(),
-            ...await this.gModUtils.getModLoadController().loadHiddenModList(),
-        ];
-        return nameList;
+        const hiddenList = await this.gModUtils.getModLoadController().loadHiddenModList() || [];
+
+        // 获取本地存在的可管理 mod 名字集合
+        const localManageable = new Set<string>();
+        const localLoader = this.gSC2DataManager.getModLoader().getLocalLoader();
+        if (localLoader) {
+            for (const name of localLoader.modZipList.keys()) {
+                if (ModLoadSwitch.MANAGEABLE_MOD_NAMES.includes(name)) {
+                    localManageable.add(name);
+                }
+            }
+        }
+
+        // 获取 IndexDB 中实际存在 sideload 数据的 mod（而非排序列表）
+        const indexDbLoader = this.gSC2DataManager.getModLoader().getIndexDBLoader();
+        const actualSideloadMods: string[] = [];
+        if (indexDbLoader) {
+            for (const name of indexDbLoader.modZipList.keys()) {
+                actualSideloadMods.push(name);
+            }
+        }
+
+        // Hidden 列表中排除本地可管理 mod（无论启用禁用都不应出现）
+        const hiddenFiltered = hiddenList.filter((name: string) =>
+            !localManageable.has(name) && !actualSideloadMods.includes(name)
+        );
+
+        return [...actualSideloadMods, ...hiddenFiltered];
     }
 
     // async listSideLoadModInfo(): Promise<{ name: string, mod: ModInfo, from: ModLoadFromSourceType }[]> {
