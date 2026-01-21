@@ -1,0 +1,131 @@
+name: Build ModLoader
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Should publish release"
+        required: true
+        type: boolean
+        default: true
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
+      fail-fast: false
+
+      matrix:
+        # https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+        os: [ubuntu-latest]
+        #os: [ ubuntu-latest, windows-latest ]
+        node-version: [18.x]
+
+    steps:
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: corepack enable
+        run: corepack enable
+
+      - uses: actions/checkout@v6
+        with:
+          repository: Lyoko-Jeremie/DoLModLoaderBuild
+          submodules: true
+
+      - uses: actions/checkout@v6
+        with:
+          path: forked
+
+      - name: SugarCube-2
+        uses: actions/checkout@v6
+        with:
+          repository: Lyoko-Jeremie/sugarcube-2_Vrelnir
+          path: SC2
+          ref: TS2
+          #submodules: recursive
+
+      - name: init ModLoader
+        working-directory: ${{ github.workspace }}/ModLoader
+        run: |
+          git submodule update --init --recursive
+          rm -rf mod/ModLoaderGui
+
+      # replace ModLoaderGui with our modified version
+      - name: Replace ModLoaderGui
+        uses: actions/checkout@v6
+        with:
+          repository: DoL-Lyra/sugarcube-2-ModLoaderGui
+          path: ${{ github.workspace }}/ModLoader/mod/ModLoaderGui
+          submodules: recursive
+
+      # patches
+      - name: Patch ModLoader
+        working-directory: ${{ github.workspace }}/ModLoader
+        run: |
+          git apply "${{ github.workspace }}/forked/patches/filter_mods_in_early_load.patch"
+
+      - name: Build ModLoader
+        working-directory: ${{ github.workspace }}/ModLoader
+        run: |
+          yarn install
+          yarn run ts:BeforeSC2
+          yarn run webpack:BeforeSC2
+          yarn run webpack:BeforeSC2-comp
+          yarn run ts:ForSC2
+          yarn run webpack:insertTools
+          yarn run tras:babel
+
+      - name: Build ModSubUiAngularJs
+        working-directory: ${{ github.workspace }}/ModLoader/mod/ModSubUiAngularJs
+        run: |
+          yarn install
+          yarn run build:ts
+          yarn run build:webpack
+          node "${{ github.workspace }}/ModLoader/dist-insertTools/packModZip.js" "boot.json"
+
+      - name: Build ModLoaderGui
+        working-directory: ${{ github.workspace }}/ModLoader/mod/ModLoaderGui
+        run: |
+          yarn install
+          yarn run build:ts
+          yarn run build:webpack
+          node "${{ github.workspace }}/ModLoader/dist-insertTools/packModZip.js" "boot.json"
+
+      - name: Upload
+        uses: actions/upload-artifact@v5
+        with:
+          name: ModLoaderGui
+          path: ${{ github.workspace }}/ModLoader/mod/ModLoaderGui/ModLoaderGui.mod.zip
+
+      - name: Get Current Time
+        id: time
+        uses: nanzm/get-time-action@master
+        with:
+          timeZone: UTC+8
+          format: "YYYY-MM-DD-HH-mm-ss"
+
+      - name: Archive Release (Releases Auto)
+        if: inputs.publish_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ModLoader/mod/ModLoaderGui/ModLoaderGui.mod.zip
+          name: Auto Release on ${{ steps.time.outputs.time }} (${{ github.sha }})
+          tag_name: auto-${{ steps.time.outputs.time }}-${{ github.sha }}
+          body: Auto Release on ${{ steps.time.outputs.time }} (${{ github.sha }})
+          # prerelease: true
